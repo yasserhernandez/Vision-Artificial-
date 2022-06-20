@@ -1,0 +1,86 @@
+import cv2
+import numpy as np
+
+class Procesador:
+    # Variable interna para guardar el fotograma del fondo
+    background = None
+    
+    def __init__(self):
+        self.background = None
+        
+    # Guardamos la variable de fondo
+    def setBackground(self, image):
+        self.background = image
+        
+    # Funcion para manejar las entradas de teclado
+    def actuate(self, key, frame):
+        if key == ord('b'):
+            self.setBackground(frame)
+            
+    def procesar(self, image):
+        #Esperamos a tener la imagen de fondo
+        if np.shape(self.background) == ():
+            return image
+        #Pasamos las imágenes a blanco y negro
+        image_blur = cv2.GaussianBlur(image, (51,51), cv2.BORDER_DEFAULT)
+        image_bw = cv2.cvtColor(image_blur, cv2.COLOR_BGR2GRAY)
+        backblur = cv2.GaussianBlur(self.background, (51,51), cv2.BORDER_DEFAULT)
+        back_bw  = cv2.cvtColor(backblur, cv2.COLOR_BGR2GRAY)
+        
+        # Hacemos la diferencia y le aplicamos el threshold
+        diff = cv2.absdiff(image_bw ,back_bw )
+        ret, mascara = cv2.threshold(diff, 30, 255, cv2.THRESH_BINARY) 
+        cv2.imshow("Mascara", mascara)
+        
+        # Eliminamos el posible ruido
+        kernel_1 = np.ones((4,4), np.uint8)
+        mascara = cv2.erode( mascara, kernel_1, iterations = 5)
+        mascara = cv2.dilate(mascara, kernel_1, iterations = 2)
+        
+        kernel_2 = np.ones((10,10), np.uint8)       
+        mascara = cv2.dilate(mascara, kernel_2, iterations = 20)
+        mascara = cv2.erode( mascara, kernel_2, iterations = 10)
+        
+        cv2.imshow("MascaraFiltrada", mascara)
+        
+        # Buscamos los contornos exteriores
+        cnts = cv2.findContours(mascara, cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE)[-2]
+        
+        # Rellenamos los contornos
+        cv2.drawContours(mascara, cnts, -1, 255, -1)
+        
+        cv2.imshow("MascaraRellena", mascara) 
+        
+        # Aplicamos la máscara y devolvemos 
+        img_masked = cv2.bitwise_and(image, image, mask=mascara) 
+        return img_masked
+
+# Adquirimos la webcam
+webcam = cv2.VideoCapture(0,cv2.CAP_DSHOW)
+webcam.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0)
+# Creamos nuestro procesador
+proc = Procesador()
+while True:
+    check , frame = webcam.read()
+    if not check:
+       break
+    # Mostramos el frame capturado
+    cv2.imshow("Frame", frame)
+    # Procesamos el frame
+    res = proc.procesar(frame)
+    #Mostramos el resultado
+    cv2.imshow("Resultado", frame)
+    cv2.imshow("resultado final",res)
+    
+    # Si pulsamos 'q' salimos
+    key = cv2.waitKey(1)
+    if key == ord('q'):
+       webcam.release()
+       cv2.destroyAllWindows()
+       break
+    else:
+       proc.actuate(key, frame)
+
+
+
